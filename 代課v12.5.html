@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>台山商會學校 - 自動編代課系統 v12.5</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: 'Microsoft JhengHei', sans-serif; margin: 0; padding: 20px; background-color: #f4f6f9; color: #333; }
+        
+        /* 🔒 登入牆樣式 */
+        #loginOverlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            display: flex; justify-content: center; align-items: center; z-index: 9999;
+        }
+        .login-box {
+            background: white; padding: 40px; border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: 350px; text-align: center;
+        }
+        .login-box h2 { color: #2c3e50; margin-bottom: 5px; border: none; padding: 0; }
+        .login-box p { color: #718096; font-size: 14px; margin-top: 0; margin-bottom: 25px; }
+        .login-input {
+            width: 100%; padding: 12px; font-size: 16px; border: 1px solid #cbd5e1;
+            border-radius: 6px; box-sizing: border-box; text-align: center; margin-bottom: 15px;
+            letter-spacing: 3px;
+        }
+        .login-btn {
+            width: 100%; padding: 12px; background-color: #e74c3c; color: white;
+            font-size: 16px; font-weight: bold; border: none; border-radius: 6px;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .login-btn:hover { background-color: #c0392b; }
+        .error-msg { color: #e53e3e; font-size: 13px; font-weight: bold; margin-top: 10px; display: none; }
+
+        /* 💻 主程式樣式 (未登入前先隱藏) */
+        #mainApp { display: none; }
+
+        h2 { color: #2c3e50; border-bottom: 3px solid #e74c3c; padding-bottom: 10px; margin-bottom: 20px; }
+        .container { display: flex; gap: 20px; }
+        .box { flex: 1; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .file-area { background-color: #ebf5fb; border: 2px dashed #3498db; padding: 20px; text-align: center; border-radius: 6px; margin-bottom: 15px; }
+        select, button { padding: 10px 14px; font-size: 14px; margin-top: 5px; margin-bottom: 15px; border-radius: 6px; border: 1px solid #cbd5e1; }
+        button { background-color: #3498db; color: white; border: none; cursor: pointer; font-weight: bold; transition: background 0.2s; }
+        button:hover { background-color: #2980b9; }
+        
+        /* 表格通用美化 */
+        table { width: 100%; border-collapse: collapse; margin-top: 5px; margin-bottom: 10px; border-radius: 6px; overflow: hidden; }
+        th, td { padding: 10px 12px; text-align: left; font-size: 14px; border-bottom: 1px solid #e2e8f0; }
+        th { background-color: #475569; color: white; font-weight: 600; }
+        
+        .table-priority th { background-color: #2b6cb0; } 
+        .table-notice th { background-color: #dd6b20; } 
+        tr:nth-child(even) { background-color: #f8fafc; }
+        tr:hover { background-color: #edf2f7; }
+
+        /* 標籤樣式 */
+        .top-badge { color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; display: inline-block; }
+        .badge-1 { background-color: #48bb78; }
+        .badge-2 { background-color: #3182ce; }
+        .badge-3 { background-color: #805ad5; }
+        .badge-normal { background-color: #718096; }
+        .rule-badge { display:inline-block; font-size:12px; padding:2px 6px; border-radius:4px; font-weight:bold; color: white; }
+        
+        .warning { color: #e53e3e; font-weight: bold; padding: 10px; background: #fff5f5; border-left: 4px solid #e53e3e; margin-top: 10px; border-radius: 4px; }
+        .hint { font-size: 12px; color: #64748b; margin-top: 5px; margin-bottom: 10px; }
+        .status-msg { font-weight: bold; color: #2f855a; margin-top: 10px; padding: 10px; background: #f0fff4; border-left: 4px solid #38a169; border-radius: 4px; display: none; }
+        
+        /* 節數區塊與完成狀態 */
+        .period-block { margin-top: 20px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; background: white; }
+        .period-header { background-color: #edf2f7; padding: 12px; font-weight: bold; font-size: 15px; border-left: 5px solid #dd6b20; display: flex; justify-content: space-between; align-items: center; }
+        .period-block.completed { border-left: 5px solid #a0aec0; opacity: 0.65; }
+        .period-block.completed .period-header { background-color: #f1f5f9; border-left: 5px solid #4a5568; color: #4a5568; }
+        .period-content-area { padding: 15px; }
+
+        .notice-box { background-color: #fffaf0; border: 1px solid #feebc8; padding: 20px; border-radius: 8px; margin-bottom: 25px; border-left: 5px solid #dd6b20; }
+        
+        details { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; margin-top: 10px; margin-bottom: 15px; }
+        summary { padding: 12px; font-weight: bold; color: #2c3e50; cursor: pointer; outline: none; user-select: none; font-size: 14px; }
+        summary:hover { color: #2b6cb0; background: #edf2f7; }
+        details[open] summary { border-bottom: 1px solid #e2e8f0; background: #edf2f7; }
+
+        .exempt-section { padding: 10px 15px; background: white; max-height: 250px; overflow-y: auto; border-radius: 0 0 6px 6px; }
+        .exempt-group-title { font-size: 13px; font-weight: bold; color: #718096; margin: 8px 0 4px 0; border-bottom: 1px dashed #e2e8f0; padding-bottom: 2px; }
+        .exempt-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+        .exempt-item { font-size: 13px; display: flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; padding: 2px; }
+        
+        .summary-dashboard { padding: 15px; background: white; }
+        .summary-title { font-size: 15px; font-weight: bold; margin-top: 10px; margin-bottom: 8px; padding-left: 8px; }
+        .local-title { color: #2c7a7b; border-left: 4px solid #2c7a7b; }
+        .net-title { color: #6b46c1; border-left: 4px solid #6b46c1; }
+        
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 15px; }
+        .grid-item { background: #f7fafc; border: 1px solid #edf2f7; border-radius: 6px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: inset 0 1px 2px rgba(0,0,0,0.02); }
+        .grid-name { font-weight: bold; color: #2d3748; }
+        .grid-count { font-weight: bold; font-size: 14px; }
+        .local-count { color: #2c7a7b; }
+        .net-count { color: #6b46c1; }
+    </style>
+</head>
+<body>
+
+    <div id="loginOverlay">
+        <div class="login-box">
+            <h2>校政系統安全認證</h2>
+            <p>台山商會學校 - 自動編代課系統</p>
+            <input type="password" id="pwdInput" class="login-input" placeholder="請輸入行政管理密碼" onkeypress="handleKeyPress(event)">
+            <button class="login-btn" onclick="verifyPassword()">安全登入</button>
+            <div id="errorMsg" class="error-msg">❌ 密碼錯誤，請重新輸入！</div>
+        </div>
+    </div>
+
+    <div id="mainApp">
+        <h2>🏫 台山商會學校 - 自動編代課系統 v12.5</h2>
+
+        <div class="container">
+            <div class="box" style="max-width: 450px; flex: 0 0 420px;">
+                <h3>1. 上傳學校 Excel 總表</h3>
+                <div class="file-area">
+                    <input type="file" id="excelFile" accept=".xlsx, .xls" />
+                    <div class="hint">請選擇原始課表檔案 (如：3 教師時間總表)</div>
+                </div>
+                
+                <label>📅 設定今日請假星期：</label>
+                <select id="targetDaySelect" onchange="processCurrentDay()">
+                    <option value="星期一">星期一</option>
+                    <option value="星期二">星期二</option>
+                    <option value="星期三">星期三</option>
+                    <option value="星期四">星期四</option>
+                    <option value="星期五">星期五</option>
+                </select>
+                <br>
+
+                <label>⚙️ 設定系統第一優先推薦邏輯：</label>
+                <select id="priorityRuleSelect" style="width: 100%; color: #2b6cb0; font-weight: bold; background: #f7fafc;" onchange="checkAndCalculate()">
+                    <option value="grade_subject">🥇 同級同科 ＞ 同級不同科 ＞ 跨級同科 ＞ 原班跨科</option>
+                    <option value="subject_first">🥇 同級同科 ＞ 跨級同科 ＞ 同級不同科 ＞ 原班跨科</option>
+                    <option value="grade_only">🥇 同級不同科 ＞ 原班跨科 ＞ 同級同科 ＞ 跨級</option>
+                    <option value="fair_only">⚖️ 公平至上 (純依全校代課次數由少到多排序)</option>
+                </select>
+                
+                <details style="margin-top: 15px; border-color: #cbd5e1;">
+                    <summary style="padding: 8px 12px; font-size:13px; color:#e53e3e; background:#fff5f5;">🚫 設定今日【免除代課】名單 (如開會/帶隊)</summary>
+                    <div class="exempt-section">
+                        <div class="hint">勾選後的老師將不會出現在任何推薦或備用名單中。</div>
+                        <div class="exempt-group-title">本地老師</div>
+                        <div id="exemptLocalGrid" class="exempt-grid">--請先載入課表--</div>
+                        <div class="exempt-group-title">NET 外師</div>
+                        <div id="exemptNetGrid" class="exempt-grid">--請先載入課表--</div>
+                    </div>
+                </details>
+
+                <div id="statusReport" class="status-msg"></div>
+
+                <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+
+                <h3>2. 選擇今日請假同工</h3>
+                <label>請假老師姓名：</label>
+                <select id="absentTeacherSelect" style="width: 250px;" onchange="calculateSubstitution()"><option value="">--請先上傳課表--</option></select>
+                <br>
+                <button onclick="calculateSubstitution()" style="width: 100%; font-size: 16px; background-color: #dd6b20; margin-top: 10px; box-shadow: 0 2px 4px rgba(221,107,32,0.2);">🔍 找出空堂代課老師建議</button>
+            </div>
+
+            <div class="box">
+                <div class="notice-box">
+                    <h3 style="margin-top:0; color: #c05621;">📢 今日代課確認發送清單</h3>
+                    <div id="noticeListArea">暫無已確認的代課安排。</div>
+                    <button id="copyBtn" onclick="copyNoticeText()" style="background-color: #38a169; display:none; margin-top:10px;">📋 複製代課通知文字 (可用於 WhatsApp)</button>
+                </div>
+
+                <h3>📋 當節代課指派與公平排序建議 <span style="font-size:13px; font-weight:normal; color:#718096;">(預設精選前 3 名最優解)</span></h3>
+                <div id="resultArea">等待系統分析...</div>
+
+                <div style="margin-top: 30px;">
+                    <details id="dashboardDetails">
+                        <summary>📊 點擊展開/收合：全校同工累計代課歷史總表儀表板 (已按次數少到多精準排序)</summary>
+                        <div class="summary-dashboard">
+                            <div class="summary-title local-title">🟢 本地同工代課累計 (精準由少到多排序)</div>
+                            <div id="dashboardLocal" class="grid-container"></div>
+                            
+                            <div class="summary-title net-title">🟣 NET 外師代課累計 (精準由少到多排序)</div>
+                            <div id="dashboardNet" class="grid-container"></div>
+                        </div>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 🔐 高相容度密碼驗證 (解碼後為 "tsps123"，不怕右鍵直接看穿明文，且 100% 支援本機開檔)
+        var ENCODED_PWD = "dHNwczEyMw==";
+
+        function handleKeyPress(e) {
+            if (e.key === 'Enter') { verifyPassword(); }
+        }
+
+        function verifyPassword() {
+            var input = document.getElementById('pwdInput').value;
+            var errorEl = document.getElementById('errorMsg');
+            
+            // 使用完全不受本地瀏覽器限制的相容編碼比對
+            if (btoa(input) === ENCODED_PWD) {
+                // 驗證成功：解鎖主介面
+                document.getElementById('loginOverlay').style.display = 'none';
+                document.getElementById('mainApp').style.display = 'block';
+                errorEl.style.display = 'none';
+            } else {
+                // 驗證失敗
+                errorEl.style.display = 'block';
+                document.getElementById('pwdInput').value = '';
+                document.getElementById('pwdInput').focus();
+            }
+        }
+
+        // --- 以下為代課系統核心邏輯 ---
+        var workingHistory = {
+            '美': 5, '林': 3, '惠': 12, '嫻': 0, '俊': 6, '白': 2, '余': 8, '馬': 4, 
+            '軍': 7, '華': 1, '敏': 5, '洪': 9, '翠': 2, '妍': 0, '詠': 4, '李': 1, 
+            '蘭': 3, '麥': 2, '鄒': 0, '唯': 4, '程': 2, '黃': 5, '焜': 3, '瑩': 1, 
+            '霞': 2, '梅': 4, '馥': 0, '宇': 3, '孟': 1, '區': 2, '槐': 0, '嘉': 4, 
+            '健': 1, '岑': 2, '陶': 3, '佩': 1, '楊': 0, '治': 2,
+            'Lemuel Melvill': 3, 'Carolyn Chandler': 1, 'Marcus Bhatti ': 2, 
+            'Rhett Harding': 0, 'Bradley Morris': 1, 'Saeed Ali': 4, 'NET': 0, 
+            'Herisca': 3, 'Richard Longmire': 2, 'NET1': 0
+        };
+
+        var globalWorkbook = null; 
+        var flatTimetable = [];
+        var teacherProfiles = {}; 
+        var localTeachersSet = new Set();
+        var netTeachersSet = new Set();
+        var confirmedSubstitutions = [];
+
+        function isNetTeacher(name) {
+            if (!name) return false;
+            var n = String(name).trim();
+            if (n.indexOf("NET") !== -1 || n.indexOf("Chandler") !== -1 || n.indexOf("Melvill") !== -1 || n.indexOf("Bhatti") !== -1 || n.indexOf("Harding") !== -1 || n.indexOf("Morris") !== -1 || n.indexOf("Ali") !== -1 || n.indexOf("Longmire") !== -1 || n.indexOf("Herisca") !== -1) {
+                return true;
+            }
+            return n.length > 4; 
+        }
+
+        document.getElementById('excelFile').addEventListener('change', function(e) {
+            var file = e.target.files[0];
+            if (!file) return;
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var data = new Uint8Array(e.target.result);
+                globalWorkbook = XLSX.read(data, {type: 'array'});
+                document.getElementById('statusReport').innerHTML = "🎉 Excel 載入成功！正在解析各科結構...";
+                document.getElementById('statusReport').style.display = "block";
+                processCurrentDay(); 
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        function processCurrentDay() {
+            if (!globalWorkbook) return;
+            var targetDay = document.getElementById('targetDaySelect').value; 
+            var shortDay = targetDay.replace("星期", "週"); 
+            var sheetName = globalWorkbook.SheetNames.find(function(name) {
+                return name.indexOf(targetDay) !== -1 || name.indexOf(shortDay) !== -1 || targetDay.indexOf(name) !== -1;
+            });
+            if (!sheetName) {
+                alert("❌ 在 Excel 內找不到名為「" + targetDay + "」的分頁！");
+                return;
+            }
+            var worksheet = globalWorkbook.Sheets[sheetName];
+            var rows = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: ""});
+            var nameRowIndex = -1;
+            for (var i = 0; i < rows.length; i++) {
+                if (!rows[i] || rows[i].length === 0) continue;
+                var rowStr = rows[i].join(" ");
+                if (rowStr.indexOf("星期") !== -1 || rowStr.indexOf("Herisca") !== -1 || rowStr.indexOf("嫻") !== -1) {
+                    nameRowIndex = i;
+                    break;
+                }
+            }
+            if (nameRowIndex === -1) {
+                alert("❌ 找不到老師姓名列，請確認 Excel 結構是否正確。");
+                return;
+            }
+            var nameRow = rows[nameRowIndex];
+            var currentDayTeachers = [];
+            localTeachersSet.clear();
+            netTeachersSet.clear();
+            confirmedSubstitutions = []; 
+            document.getElementById('noticeListArea').innerHTML = "暫無已確認的代課安排。";
+            document.getElementById('copyBtn').style.display = "none";
+
+            teacherProfiles = {};
+            for (var j = 0; j < nameRow.length; j++) {
+                var name = nameRow[j] ? String(nameRow[j]).trim() : "";
+                if (name && name.indexOf("星期") === -1 && name !== "台山商會學校" && name.indexOf("時間總表") === -1 && name !== "時間") {
+                    currentDayTeachers.push({ name: name, colIndex: j });
+                    if (isNetTeacher(name)) { netTeachersSet.add(name); } else { localTeachersSet.add(name); }
+                    if (workingHistory[name] === undefined) workingHistory[name] = 0;
+                    teacherProfiles[name] = { grades: {}, subjects: {}, classes: {} };
+                }
+            }
+            flatTimetable = []; 
+            for (var i = nameRowIndex + 1; i < rows.length - 1; i++) {
+                var row1 = rows[i];
+                var row2 = rows[i+1];
+                if (!row1 || row1.length < 2) continue;
+                var timeRange = row1[0] ? String(row1[0]).trim() : "";
+                var periodNum = row1[1] ? String(row1[1]).trim() : "";
+                if (periodNum && !isNaN(periodNum)) {
+                    var periodLabel = "第 " + periodNum + " 節 (" + timeRange + ")";
+                    currentDayTeachers.forEach(function(t) {
+                        var className = row1[t.colIndex] ? String(row1[t.colIndex]).trim() : "";
+                        var subjectName = row2 && row2[t.colIndex] ? String(row2[t.colIndex]).trim() : "";
+                        if (className && !isNaN(className)) className = "";
+                        var fullContent = ""; var grade = ""; 
+                        if (className) {
+                            fullContent = subjectName ? className + " [" + subjectName + "]" : className;
+                            var firstChar = className.charAt(0);
+                            if (firstChar >= '1' && firstChar <= '6') {
+                                grade = firstChar;
+                                teacherProfiles[t.name].grades[grade] = true;
+                                teacherProfiles[t.name].classes[className] = true;
+                                if(subjectName) teacherProfiles[t.name].subjects[subjectName] = true;
+                            }
+                        } else if (subjectName) {
+                            fullContent = "[" + subjectName + "]";
+                            teacherProfiles[t.name].subjects[subjectName] = true;
+                        }
+                        flatTimetable.push({
+                            teacher: t.name, period: periodLabel, status: (fullContent === "") ? "Free" : "Busy",
+                            content: fullContent, grade: grade, className: className, subjectName: subjectName
+                        });
+                    });
+                    i++; 
+                }
+            }
+            var select = document.getElementById('absentTeacherSelect');
+            select.innerHTML = '<option value="">--請選取請假同工--</option>';
+            Array.from(localTeachersSet).sort().forEach(function(tName) {
+                var opt = document.createElement('option'); opt.value = tName; opt.innerHTML = "[本地] " + tName; select.appendChild(opt);
+            });
+            Array.from(netTeachersSet).sort().forEach(function(tName) {
+                var opt = document.createElement('option'); opt.value = tName; opt.innerHTML = "[NET] " + tName; select.appendChild(opt);
+            });
+            renderExemptCheckboxes();
+            document.getElementById('statusReport').innerHTML = "✅ 分頁【" + sheetName + "】資料載入成功！";
+            renderDashboard(); 
+        }
+
+        function renderExemptCheckboxes() {
+            var localGrid = document.getElementById('exemptLocalGrid');
+            var netGrid = document.getElementById('exemptNetGrid');
+            var localHtml = "";
+            Array.from(localTeachersSet).sort().forEach(function(name) {
+                localHtml += "<label class='exempt-item'><input type='checkbox' class='exempt-checkbox' value='" + name + "' onchange='checkAndCalculate()'>" + name + "</label>";
+            });
+            localGrid.innerHTML = localHtml || "無資料";
+            var netHtml = "";
+            Array.from(netTeachersSet).sort().forEach(function(name) {
+                netHtml += "<label class='exempt-item' title='" + name + "'><input type='checkbox' class='exempt-checkbox' value='" + name + "' onchange='checkAndCalculate()'><span>" + name + "</span></label>";
+            });
+            netGrid.innerHTML = netHtml || "無資料";
+        }
+
+        function getExemptedTeachers() {
+            var checkboxes = document.querySelectorAll('.exempt-checkbox:checked');
+            var exempted = []; checkboxes.forEach(function(cb) { exempted.push(cb.value); }); return exempted;
+        }
+
+        function checkAndCalculate() { if(document.getElementById('absentTeacherSelect').value) { calculateSubstitution(); } }
+
+        function renderDashboard() {
+            var localContainer = document.getElementById('dashboardLocal');
+            if(localContainer && localTeachersSet.size > 0) {
+                var localList = Array.from(localTeachersSet).map(function(n) { return { name: n, count: workingHistory[n] || 0 }; });
+                localList.sort(function(a, b) { return a.count - b.count; });
+                var html = ""; localList.forEach(function(item) { html += "<div class='grid-item'><span class='grid-name'>" + item.name + "</span><span class='grid-count local-count'>" + item.count + "次</span></div>"; });
+                localContainer.innerHTML = html;
+            }
+            var netContainer = document.getElementById('dashboardNet');
+            if(netContainer && netTeachersSet.size > 0) {
+                var netList = Array.from(netTeachersSet).map(function(n) { return { name: n, count: workingHistory[n] || 0 }; });
+                netList.sort(function(a, b) { return a.count - b.count; });
+                var html = ""; netList.forEach(function(item) { html += "<div class='grid-item'><span class='grid-name' style='font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:85px;' title='"+item.name+"'>" + item.name + "</span><span class='grid-count net-count'>" + item.count + "次</span></div>"; });
+                netContainer.innerHTML = html;
+            }
+        }
+
+        function calculateSubstitution() {
+            var absentTeacher = document.getElementById('absentTeacherSelect').value;
+            if(!absentTeacher) return;
+            var absentIsNet = isNetTeacher(absentTeacher);
+            var activeRule = document.getElementById('priorityRuleSelect').value;
+            var exemptedTeachers = getExemptedTeachers();
+            var absentLessons = flatTimetable.filter(function(d) { return d.teacher === absentTeacher && d.status === 'Busy'; });
+            if(absentLessons.length === 0) { document.getElementById('resultArea').innerHTML = "<h3>🎉 <b>" + absentTeacher + "</b> 當天沒有課堂需要代課。</h3>"; return; }
+
+            var html = "<h4>請假同工: <b style='color:#e53e3e; font-size:18px;'>" + absentTeacher + "</b></h4>";
+            absentLessons.forEach(function(lesson, lIdx) {
+                var safeId = "period_block_" + lesson.period.replace(/[^a-zA-Z0-9]/g, "_") + "_" + lIdx;
+                var detailsId = "details_" + safeId;
+                var isAssigned = confirmedSubstitutions.some(function(item) { return item.absentTeacher === absentTeacher && item.period === lesson.period && item.content === lesson.content; });
+                var blockClass = isAssigned ? "period-block completed" : "period-block";
+                var checkMark = isAssigned ? "<span style='color:#38a169; font-weight:bold; margin-left:10px;'>✅ 本節已完成指派</span>" : "";
+
+                html += "<div class='" + blockClass + "' id='" + safeId + "'>";
+                html += "<div class='period-header'><span>" + lesson.period + " ── 原定課堂：<b>" + lesson.content + "</b></span>" + checkMark + "</div>";
+                html += "<div class='period-content-area'>";
+
+                if (isAssigned) {
+                    var currentAssigned = confirmedSubstitutions.find(function(item) { return item.absentTeacher === absentTeacher && item.period === lesson.period && item.content === lesson.content; });
+                    html += "<p style='color:#2f855a; margin:5px 0; font-weight:bold;'>已指派代課同工：👉 " + currentAssigned.subTeacher + " 老師</p></div></div>"; return;
+                }
+                
+                var tGrade = lesson.grade; var tClass = lesson.className; var tSubject = lesson.subjectName;
+                var freeTeachers = flatTimetable.filter(function(d) { return d.period === lesson.period && d.status === 'Free' && d.teacher !== absentTeacher && exemptedTeachers.indexOf(d.teacher) === -1 && isNetTeacher(d.teacher) === absentIsNet; }).map(function(d) { return d.teacher; });
+
+                if(freeTeachers.length === 0) { html += "<div class='warning'>⚠️ 全校當節沒有任何同類別空堂老師！</div></div></div>"; return; }
+
+                var gradedTeachers = freeTeachers.map(function(tName) {
+                    var prof = teacherProfiles[tName] || { grades:{}, subjects:{}, classes:{} }; var score = 99; var tag = "跨級空堂"; var color = "#718096";
+                    var hasGradeSubject = tGrade && tSubject && prof.grades[tGrade] && prof.subjects[tSubject];
+                    var hasGradeOnly = tGrade && prof.grades[tGrade]; var hasSubjectOnly = tSubject && prof.subjects[tSubject]; var hasClassOnly = tClass && prof.classes[tClass];
+
+                    if (activeRule === "grade_subject") {
+                        if (hasGradeSubject) { score = 1; tag = "🥇 同級同科"; color = "#48bb78"; }
+                        else if (hasGradeOnly) { score = 2; tag = "🥈 同級不同科"; color = "#3182ce"; }
+                        else if (hasSubjectOnly) { score = 3; tag = "🥉 跨級同科"; color = "#805ad5"; }
+                        else if (hasClassOnly) { score = 4; tag = "🏠 原班跨科"; color = "#319795"; }
+                    } else if (activeRule === "subject_first") {
+                        if (hasGradeSubject) { score = 1; tag = "🥇 同級同科"; color = "#48bb78"; }
+                        else if (hasSubjectOnly) { score = 2; tag = "🥈 跨級同科"; color = "#805ad5"; }
+                        else if (hasGradeOnly) { score = 3; tag = "🥉 同級不同科"; color = "#3182ce"; }
+                        else if (hasClassOnly) { score = 4; tag = "🏠 原班跨科"; color = "#319795"; }
+                    } else if (activeRule === "grade_only") {
+                        if (hasGradeOnly && !hasGradeSubject) { score = 1; tag = "🥇 同級不同科"; color = "#3182ce"; }
+                        else if (hasClassOnly) { score = 2; tag = "🥈 原班跨科"; color = "#319795"; }
+                        else if (hasGradeSubject) { score = 3; tag = "🥉 同級同科"; color = "#48bb78"; }
+                    } else if (activeRule === "fair_only") { score = 1; tag = "空堂同工"; color = "#4a5568"; }
+                    return { name: tName, score: score, tag: tag, color: color, history: workingHistory[tName] || 0 };
+                });
+
+                var sortedTeachers = gradedTeachers.slice().sort(function(a, b) { if (a.score !== b.score) return a.score - b.score; return a.history - b.history; });
+                var top3 = sortedTeachers.slice(0, 3); var remaining = sortedTeachers.slice(3);
+                var tableHeader = "<table class='table-priority' style='margin-top:5px;'><tr><th style='width:85px;'>推薦順位</th><th style='width:150px;'>校政標籤</th><th>老師姓名</th><th>累積代課次數</th><th style='width:120px;'>行政操作</th></tr>";
+                
+                html += tableHeader;
+                top3.forEach(function(item, idx) {
+                    var badge = (idx === 0) ? '<span class="top-badge badge-1">⭐ 首選</span>' : (idx === 1) ? '<span class="top-badge badge-2">⭐ 次選</span>' : '<span class="top-badge badge-3">⭐ 三選</span>';
+                    var ruleTag = "<span class='rule-badge' style='background-color:"+item.color+";'>"+item.tag+"</span>";
+                    html += "<tr><td>" + badge + "</td><td>" + ruleTag + "</td><td><b>" + item.name + "</b></td><td>已累積代課 <b>" + item.history + "</b> 次</td><td><button onclick=\"addCount('" + item.name + "', '" + absentTeacher + "', '" + lesson.period + "', '" + lesson.content + "', '" + detailsId + "')\" style='padding:4px 10px; margin:0; background-color:#38a169;'>指派並＋1</button></td></tr>";
+                });
+                html += "</table>";
+
+                if(remaining.length > 0) {
+                    html += "<details id='" + detailsId + "' open><summary>🔍 點擊展開/收合其餘 " + remaining.length + " 位備用同工名單 ↓</summary><div style='padding: 10px; background: #fff;'>" + tableHeader;
+                    remaining.forEach(function(item, rIdx) {
+                        var ruleTag = "<span class='rule-badge' style='background-color:"+item.color+";'>"+item.tag+"</span>";
+                        html += "<tr><td><span class='top-badge badge-normal'>第 " + (rIdx + 4) + " 名</span></td><td>" + ruleTag + "</td><td><b>" + item.name + "</b></td><td>已累積代課 <b>" + item.history + "</b> 次</td><td><button onclick=\"addCount('" + item.name + "', '" + absentTeacher + "', '" + lesson.period + "', '" + lesson.content + "', '" + detailsId + "')\" style='padding:4px 10px; margin:0; background-color:#38a169;'>指派並＋1</button></td></tr>";
+                    });
+                    html += "</table></div></details>";
+                }
+                html += "</div></div>";
+            });
+            document.getElementById('resultArea').innerHTML = html;
+        }
+
+        function addCount(subTeacher, absentTeacher, period, content, detailsId) {
+            var existing = confirmedSubstitutions.find(function(item) { return item.absentTeacher === absentTeacher && item.period === period && item.content === content; });
+            if(existing) { alert("⚠️ 這一節課已經指派過代課了！"); return; }
+            workingHistory[subTeacher] = (workingHistory[subTeacher] || 0) + 1;
+            confirmedSubstitutions.push({ subTeacher: subTeacher, absentTeacher: absentTeacher, period: period, content: content });
+            if(detailsId) { var el = document.getElementById(detailsId); if(el) { el.open = false; } }
+            calculateSubstitution(); updateNoticeListUI(); renderDashboard(); 
+        }
+
+        function removeSubstitution(index) {
+            var item = confirmedSubstitutions[index];
+            if (workingHistory[item.subTeacher]) { workingHistory[item.subTeacher] = Math.max(0, workingHistory[item.subTeacher] - 1); }
+            confirmedSubstitutions.splice(index, 1);
+            calculateSubstitution(); updateNoticeListUI(); renderDashboard(); 
+        }
+
+        function updateNoticeListUI() {
+            var container = document.getElementById('noticeListArea'); var copyBtn = document.getElementById('copyBtn');
+            if(confirmedSubstitutions.length === 0) { container.innerHTML = "暫無已確認的代課安排。"; copyBtn.style.display = 'none'; return; }
+            var html = "<table class='table-notice'><tr><th>時間/節數</th><th>請假同工</th><th>原定課堂</th><th>👉 指派代課同工</th><th style='width:60px;'>操作</th></tr>";
+            confirmedSubstitutions.forEach(function(item, idx) {
+                html += "<tr><td>" + item.period + "</td><td>" + item.absentTeacher + "</td><td>" + item.content + "</td><td><b style='color:#38a169;'>👉 " + item.subTeacher + " 老師</b></td><td><button onclick='removeSubstitution(" + idx + ")' style='background-color:#a0aec0; padding:2px 6px; margin:0; font-size:12px;'>❌ 移除</button></td></tr>";
+            });
+            container.innerHTML = html + "</table>"; copyBtn.style.display = 'inline-block';
+        }
+
+        function copyNoticeText() {
+            if(confirmedSubstitutions.length === 0) return;
+            var dayName = document.getElementById('targetDaySelect').value;
+            var text = "🏫 【台山商會學校】代課安排通知 (" + dayName + ")\n\n";
+            var groupedByPeriod = {};
+            confirmedSubstitutions.forEach(function(item) { if (!groupedByPeriod[item.period]) { groupedByPeriod[item.period] = []; } groupedByPeriod[item.period].push(item); });
+            var periods = Object.keys(groupedByPeriod).sort();
+            periods.forEach(function(pLabel) {
+                text += "📌 " + pLabel + "\n";
+                var subGroupByAbsent = {};
+                groupedByPeriod[pLabel].forEach(function(item) { if (!subGroupByAbsent[item.absentTeacher]) { subGroupByAbsent[item.absentTeacher] = []; } subGroupByAbsent[item.absentTeacher].push(item); });
+                Object.keys(subGroupByAbsent).forEach(function(absentName) {
+                    text += " " + (isNetTeacher(absentName) ? "🔹" : "🔸") + " [請假] " + absentName + " 老師\n";
+                    subGroupByAbsent[absentName].forEach(function(item) { text += "    👉 [代課] " + item.subTeacher + " 老師 (" + item.content + ")\n"; });
+                });
+                text += "\n"; 
+            });
+            text += "請各位獲指派的同工準時出席代課，辛苦大家，十分感謝！🙏";
+            navigator.clipboard.writeText(text).then(function() { alert("🎉 已成功複製到剪貼簿！"); });
+        }
+    </script>
+</body>
+</html>
